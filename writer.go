@@ -11,6 +11,7 @@ import (
 	"github.com/kei2100/rotate/logger"
 )
 
+// NewWriter creates a *rotate.Writer
 func NewWriter(dir, filename string, opts ...OptionFunc) (*Writer, error) {
 	var opt option
 	opt.apply(opts...)
@@ -34,6 +35,7 @@ func NewWriter(dir, filename string, opts ...OptionFunc) (*Writer, error) {
 	}, nil
 }
 
+// Writer is a rotating file writer
 type Writer struct {
 	mu       sync.RWMutex
 	f        *os.File
@@ -42,6 +44,7 @@ type Writer struct {
 	opt      option
 }
 
+// Write implements io.Writer
 func (w *Writer) Write(p []byte) (int, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -104,6 +107,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 	return n, nil
 }
 
+// Close closes the file and releases resources
 func (w *Writer) Close() error {
 	w.mu.RLock()
 	w.state.storeAsClosed()
@@ -113,11 +117,11 @@ func (w *Writer) Close() error {
 	return err
 }
 
-func formatRotatedPath(currentPath string, num int) string {
-	return fmt.Sprintf("%s.%d", currentPath, num)
+func formatRotatedPath(path string, num int) string {
+	return fmt.Sprintf("%s.%d", path, num)
 }
 
-func randPath(currentFilePath string) (string, error) {
+func randPath(path string) (string, error) {
 	pid := os.Getpid()
 	nano := time.Now().UnixNano()
 	b := make([]byte, 8)
@@ -125,16 +129,16 @@ func randPath(currentFilePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("rotate: failed to generate rand path: %+v", err)
 	}
-	return fmt.Sprintf("%s-%d-%d-%x", currentFilePath, pid, nano, b), nil
+	return fmt.Sprintf("%s-%d-%d-%x", path, pid, nano, b), nil
 }
 
-//   e.g. currentPath "log", keeps 3
+//   e.g. path "log", keeps 3
 //   - log > log.1 | log.1 > log.2 | log.2 > log.3 | log.3 > remove
 //   - log > log.1 | log.1 > log.2 |               | log.3 > not change
-func pushAndShiftKeeps(filePath string, keeps int) error {
+func pushAndShiftKeeps(path string, keeps int) error {
 	files := make([]string, 0, keeps+1)
 	for i := keeps; i > 0; i-- {
-		p := formatRotatedPath(filePath, i)
+		p := formatRotatedPath(path, i)
 		if _, err := os.Stat(p); err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -145,7 +149,7 @@ func pushAndShiftKeeps(filePath string, keeps int) error {
 	}
 	// - [log.3 log.2 log.1 log]
 	// - [log.3 log.1 log]
-	files = append(files, filePath)
+	files = append(files, path)
 
 	if len(files) > keeps {
 		if err := os.Remove(files[0]); err != nil && !os.IsNotExist(err) {
@@ -155,7 +159,7 @@ func pushAndShiftKeeps(filePath string, keeps int) error {
 		files = files[1:]
 	}
 	for i, old := range files {
-		nw := formatRotatedPath(filePath, len(files)-i)
+		nw := formatRotatedPath(path, len(files)-i)
 		if err := os.Rename(old, nw); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("rotate: failed to rename %s to %s", old, nw)
 		}

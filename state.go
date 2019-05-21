@@ -4,16 +4,20 @@ import (
 	"sync/atomic"
 )
 
+// FileState holds the state of the current write destination file
 type FileState struct {
+	// openedAt Unix time
 	openedAt int64
 	// file size (when opened) + written bytes
 	size int64
 }
 
+// OpenedAt returns openedAt
 func (s *FileState) OpenedAt() int64 {
 	return atomic.LoadInt64(&s.openedAt)
 }
 
+// Size returns `file size (when opened) + written bytes`
 func (s *FileState) Size() int64 {
 	return atomic.LoadInt64(&s.size)
 }
