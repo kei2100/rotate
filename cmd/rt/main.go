@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	w, err := rotate.NewWriter("/tmp/rotate", "log.log", rotate.WithConfigFunc(rotate.SizeConfig(2)))
+	w, err := rotate.NewWriter("/tmp/rotate", "log.log", rotate.WithConfigFunc(rotate.SizeBasedConfig(2)))
 	if err != nil {
 		panic(err)
 	}
