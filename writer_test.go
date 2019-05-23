@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func TestWriter_Rotate(t *testing.T) {
@@ -18,8 +20,8 @@ func TestWriter_Rotate(t *testing.T) {
 	dir := createTmpDir()
 	defer dir.removeAll()
 
-	nBytes := 100
-	keeps := 2
+	const nBytes = 100
+	const keeps = 2
 
 	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithConfigFunc(SizeBasedConfig(int64(nBytes))))
 	if err != nil {
@@ -80,7 +82,132 @@ func TestWriter_Rotate(t *testing.T) {
 	}
 }
 
-// TODO multigroutine
+func TestWriter_Rotate_Parallel(t *testing.T) {
+	t.Parallel()
+
+	dir := createTmpDir()
+	defer dir.removeAll()
+
+	const nBytes = 100
+	const keeps = 2
+	const nGoroutines = 10
+
+	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithConfigFunc(SizeBasedConfig(int64(nBytes))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+
+	if err := nGroutinesDo(nGoroutines, func() error { return writeNCount(w, "a", 9) }); err != nil { // a * 90 bytes
+		t.Fatal(err)
+	}
+	if err := dir.waitFileCreated(time.Second, "test.log"); err != nil {
+		t.Fatal(err)
+	}
+	if err := dir.waitFileNotCreated(200*time.Millisecond, "test.log.1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := nGroutinesDo(nGoroutines, func() error { return writeNCount(w, "b", 8) }); err != nil { // b * 80 bytes
+		t.Fatal(err)
+	}
+	if err := dir.waitFileCreated(time.Second, "test.log", "test.log.1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := dir.waitFileNotCreated(200*time.Millisecond, "test.log.2"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := nGroutinesDo(nGoroutines, func() error { return writeNCount(w, "c", 11) }); err != nil { // c * 110 bytes
+		t.Fatal(err)
+	}
+	if err := dir.waitFileCreated(time.Second, "test.log", "test.log.1", "test.log.2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := dir.waitFileNotCreated(200*time.Millisecond, "test.log.3"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := containsNCount("a", 90, dir, "test.log.1", "test.log.2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := containsNCount("b", 80, dir, "test.log.1", "test.log.2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := containsNCount("c", 110, dir, "test.log", "test.log.1"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_pushAndShiftKeeps(t *testing.T) {
+	t.Parallel()
+
+	tt := []struct {
+		file            string
+		rotatedFiles    []string
+		keeps           int
+		wantIncludes    []string
+		wantNotIncludes []string
+	}{
+		{
+			file:         "test.log",
+			keeps:        3,
+			wantIncludes: []string{"test.log.1"},
+		},
+		{
+			file:         "test.log",
+			rotatedFiles: []string{"test.log.1"},
+			keeps:        3,
+			wantIncludes: []string{"test.log.1", "test.log.2"},
+		},
+		{
+			file:         "test.log",
+			rotatedFiles: []string{"test.log.1", "test.log.2"},
+			keeps:        3,
+			wantIncludes: []string{"test.log.1", "test.log.2", "test.log.3"},
+		},
+		{
+			file:            "test.log",
+			rotatedFiles:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			wantNotIncludes: []string{"test.log.4"},
+		},
+		{
+			file:            "test.log",
+			rotatedFiles:    []string{"test.log.2", "test.log.3"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			wantNotIncludes: []string{"test.log.4"},
+		},
+		{
+			file:            "test.log",
+			rotatedFiles:    []string{"test.log.1", "test.log.3"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			wantNotIncludes: []string{"test.log.4"},
+		},
+	}
+	for i, te := range tt {
+		t.Run(fmt.Sprintf("#%d", i), func(t *testing.T) {
+			dir := createTmpDir()
+			defer dir.removeAll()
+
+			if err := touchFiles(dir, append(te.rotatedFiles, te.file)...); err != nil {
+				t.Fatal(err)
+			}
+			if err := pushAndShiftKeeps(filepath.Join(string(dir), te.file), te.keeps); err != nil {
+				t.Fatal(err)
+			}
+			if err := dir.waitFileCreated(time.Millisecond, te.wantIncludes...); err != nil {
+				t.Error(err)
+			}
+			if err := dir.waitFileNotCreated(time.Millisecond, te.wantNotIncludes...); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
 
 type tmpDir string
 
@@ -204,4 +331,21 @@ func emptyFile(d tmpDir, filename string) error {
 		return fmt.Errorf("%s is not empty (%d bytes)", filename, fi.Size())
 	}
 	return nil
+}
+
+func touchFiles(d tmpDir, filenames ...string) error {
+	for _, fn := range filenames {
+		if err := ioutil.WriteFile(filepath.Join(string(d), fn), []byte{}, 0600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func nGroutinesDo(n int, fn func() error) error {
+	eg := errgroup.Group{}
+	for i := 0; i < n; i++ {
+		eg.Go(fn)
+	}
+	return eg.Wait()
 }
