@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	// TODO fix
 	w, err := rotate.NewWriter("/tmp/rotate", "log.log", rotate.WithConfigFunc(rotate.SizeBasedConfig(2)))
 	if err != nil {
 		panic(err)

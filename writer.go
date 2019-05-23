@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kei2100/rotate/internal/file"
+	"github.com/kei2100/rotate/internal/state"
 	"github.com/kei2100/rotate/logger"
 )
 
@@ -17,7 +19,7 @@ func NewWriter(dir, filename string, opts ...OptionFunc) (*Writer, error) {
 	opt.apply(opts...)
 
 	filePath := filepath.Join(dir, filename)
-	f, err := openFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, opt.permission)
+	f, err := file.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, opt.permission)
 	if err != nil {
 		return nil, err
 	}
@@ -26,10 +28,8 @@ func NewWriter(dir, filename string, opts ...OptionFunc) (*Writer, error) {
 		return nil, err
 	}
 	return &Writer{
-		f: f,
-		state: state{
-			FileState: FileState{openedAt: time.Now().Unix(), size: fi.Size()},
-		},
+		f:        f,
+		state:    state.NewState(time.Now().Unix(), fi.Size()),
 		filePath: filePath,
 		opt:      opt,
 	}, nil
@@ -37,9 +37,10 @@ func NewWriter(dir, filename string, opts ...OptionFunc) (*Writer, error) {
 
 // Writer is a rotating file writer
 type Writer struct {
-	mu       sync.RWMutex
-	f        *os.File
-	state    state
+	mu    sync.RWMutex
+	f     *os.File
+	state *state.State
+
 	filePath string
 	opt      option
 }
@@ -53,42 +54,42 @@ func (w *Writer) Write(p []byte) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	w.state.addSize(int64(n))
-	if !w.opt.conf.NeedRotate(w.state.FileState) {
+	w.state.AddSize(int64(n))
+	if !w.opt.conf.NeedRotate(FileState{OpenedAt: w.state.OpenedAt(), Size: w.state.Size()}) {
 		return n, nil
 	}
-	if !w.state.compareAndSwapAsRotating() {
+	if !w.state.CompareAndSwapAsRotating() {
 		return n, nil
 	}
 
-	go func(current *os.File, st *state, opt option) {
+	go func(current *os.File, st *state.State, opt option) {
 		nextTmpPath, err := randPath(w.filePath)
 		if err != nil {
 			logger.Println(err)
-			st.compareAndSwapAsNotRotating()
+			st.CompareAndSwapAsNotRotating()
 			return
 		}
-		next, err := openFile(nextTmpPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, opt.permission)
+		next, err := file.OpenFile(nextTmpPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_SYNC, opt.permission)
 		if err != nil {
 			logger.Println(err)
-			st.compareAndSwapAsNotRotating()
+			st.CompareAndSwapAsNotRotating()
 			return
 		}
 		if err := pushAndShiftKeeps(w.filePath, opt.keeps); err != nil {
 			logger.Println(err)
-			st.compareAndSwapAsNotRotating()
+			st.CompareAndSwapAsNotRotating()
 			return
 		}
 		if err := os.Rename(nextTmpPath, w.filePath); err != nil {
 			logger.Printf("rotate: failed to rename %s to %s: %+v", nextTmpPath, w.filePath, err)
-			st.compareAndSwapAsNotRotating()
+			st.CompareAndSwapAsNotRotating()
 			return
 		}
 
 		w.mu.Lock()
 		defer w.mu.Unlock()
 
-		if st.isClosed() {
+		if st.IsClosed() {
 			if err := next.Close(); err != nil {
 				logger.Printf("rotate: an error occurred while closing next file: %+v", err)
 			}
@@ -99,10 +100,8 @@ func (w *Writer) Write(p []byte) (int, error) {
 			// not return
 		}
 		w.f = next
-		w.state = state{
-			FileState: FileState{openedAt: time.Now().Unix()},
-		}
-	}(w.f, &w.state, w.opt)
+		w.state = state.NewState(time.Now().Unix(), 0)
+	}(w.f, w.state, w.opt)
 
 	return n, nil
 }
@@ -110,7 +109,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 // Close closes the file and releases resources
 func (w *Writer) Close() error {
 	w.mu.RLock()
-	w.state.storeAsClosed()
+	w.state.StoreAsClosed()
 	err := w.f.Close()
 	w.mu.RUnlock()
 
