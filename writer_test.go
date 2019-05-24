@@ -6,10 +6,14 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mitchellh/go-ps"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -135,6 +139,57 @@ func TestWriter_Rotate_Parallel(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := containsNCount("c", 110, dir, "test.log", "test.log.1"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriter_Rotate_WhileOpeningFileFromAnotherProcess(t *testing.T) {
+	t.Parallel()
+
+	dir := createTmpDir()
+	defer dir.removeAll()
+
+	const nBytes = 100
+	const keeps = 2
+
+	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithConfigFunc(SizeBasedConfig(int64(nBytes))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	writeNCount(w, "a", nBytes-1)
+
+	prog := buildOpenFileProg(dir)
+	cmd := exec.Command(prog, filepath.Join(string(dir), "test.log"))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	go func() { cmd.Wait() }()
+	time.Sleep(500 * time.Millisecond)
+
+	proc, err := ps.FindProcess(cmd.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proc == nil {
+		t.Fatal("process not found")
+	}
+
+	writeNCount(w, "a", 1)
+	time.Sleep(500 * time.Millisecond)
+
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+
+	writeNCount(w, "a", 1)
+	if err := dir.waitFileCreated(time.Second, "test.log", "test.log.1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := containsNCount("a", nBytes+1, dir, "test.log", "test.log.1"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -348,4 +403,27 @@ func nGroutinesDo(n int, fn func() error) error {
 		eg.Go(fn)
 	}
 	return eg.Wait()
+}
+
+func buildOpenFileProg(dir tmpDir) string {
+	dstPath := filepath.Join(string(dir), "openfile"+binExtension())
+	srcPath := filepath.Join("testdata", "cmd", "openfile", "main.go")
+	cmd := exec.Command("go", "build", "-o", dstPath, srcPath)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		panic(err)
+	}
+	if err := cmd.Wait(); err != nil {
+		panic(err)
+	}
+	return dstPath
+}
+
+func binExtension() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
 }
