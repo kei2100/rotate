@@ -66,22 +66,26 @@ func (w *Writer) Write(p []byte) (int, error) {
 		nextTmpPath, err := randPath(w.filePath)
 		if err != nil {
 			logger.Println(err)
+			logger.Printf("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
 		next, err := file.OpenFile(nextTmpPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_SYNC, opt.permission)
 		if err != nil {
 			logger.Println(err)
+			logger.Printf("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
 		if err := pushAndShiftKeeps(w.filePath, opt.keeps); err != nil {
 			logger.Println(err)
+			logger.Printf("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
 		if err := os.Rename(nextTmpPath, w.filePath); err != nil {
 			logger.Printf("rotate: failed to rename %s to %s: %+v", nextTmpPath, w.filePath, err)
+			logger.Printf("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
