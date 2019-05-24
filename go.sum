@@ -1,4 +1,6 @@
 github.com/kei2100/filesharedelete v0.0.0-20190518131055-3d9295e38c0f h1:KLA+gc/GaBKy4mntWqQTY46rdZDKH2+qd1S2IZuk16w=
 github.com/kei2100/filesharedelete v0.0.0-20190518131055-3d9295e38c0f/go.mod h1:5O/LGCcam1cZ+Ob/GKhXB9hFAXj5TGVxHuC7qHDDXhg=
+github.com/mitchellh/go-ps v0.0.0-20170309133038-4fdf99ab2936 h1:kw1v0NlnN+GZcU8Ma8CLF2Zzgjfx95gs3/GN3vYAPpo=
+github.com/mitchellh/go-ps v0.0.0-20170309133038-4fdf99ab2936/go.mod h1:r1VsdOzOPt1ZSrGZWFoNhsAedKnEd6r9Np1+5blZCWk=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58 h1:8gQV6CLnAEikrhgkHFbMAEhagSSnXWGV915qUMm9mrU=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
