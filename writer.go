@@ -1,7 +1,6 @@
 package rotate
 
 import (
-	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,29 +62,15 @@ func (w *Writer) Write(p []byte) (int, error) {
 	}
 
 	go func(current *os.File, st *state.State, opt option) {
-		nextTmpPath, err := randPath(w.filePath)
-		if err != nil {
-			logger.Println(err)
-			logger.Printf("rotate: wait for rotate until next writing")
-			st.CompareAndSwapAsNotRotating()
-			return
-		}
-		next, err := file.OpenFile(nextTmpPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_SYNC, opt.permission)
-		if err != nil {
-			logger.Println(err)
-			logger.Printf("rotate: wait for rotate until next writing")
-			st.CompareAndSwapAsNotRotating()
-			return
-		}
-		defer os.Remove(nextTmpPath)
 		if err := pushAndShiftKeeps(w.filePath, opt.keeps); err != nil {
 			logger.Println(err)
 			logger.Printf("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
-		if err := os.Rename(nextTmpPath, w.filePath); err != nil {
-			logger.Printf("rotate: failed to rename %s to %s: %+v", nextTmpPath, w.filePath, err)
+		next, err := file.OpenFile(w.filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_SYNC, opt.permission)
+		if err != nil {
+			logger.Println(err)
 			logger.Printf("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
@@ -125,22 +110,23 @@ func formatRotatedPath(path string, num int) string {
 	return fmt.Sprintf("%s.%d", path, num)
 }
 
-func randPath(path string) (string, error) {
-	pid := os.Getpid()
-	nano := time.Now().UnixNano()
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", fmt.Errorf("rotate: failed to generate rand path: %+v", err)
-	}
-	return fmt.Sprintf("%s-%d-%d-%x", path, pid, nano, b), nil
-}
-
 //   e.g. path "log", keeps 3
 //   - log > log.1 | log.1 > log.2 | log.2 > log.3 | log.3 > remove
-//   - log > log.1 | log.1 > log.2 |               | log.3 > not change
+//   - log > log.1 | log.1 > log.2 |               | log.3 > noop
+//   -             | log.1 > noop  | log.2 > noop  | log.3 > noop
 func pushAndShiftKeeps(path string, keeps int) error {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("rotate: failed to get stat %s: %+v", path, err)
+	}
+	if keeps < 0 {
+		keeps = 0
+	}
 	files := make([]string, 0, keeps+1)
+	// - [log.3 log.2 log.1]
+	// - [log.3 log.1]
 	for i := keeps; i > 0; i-- {
 		p := formatRotatedPath(path, i)
 		if _, err := os.Stat(p); err != nil {
@@ -154,7 +140,6 @@ func pushAndShiftKeeps(path string, keeps int) error {
 	// - [log.3 log.2 log.1 log]
 	// - [log.3 log.1 log]
 	files = append(files, path)
-
 	if len(files) > keeps {
 		if err := os.Remove(files[0]); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("rotate: failed to remove %s", files[0])
