@@ -27,7 +27,7 @@ func TestWriter_Rotate(t *testing.T) {
 	const nBytes = 100
 	const keeps = 2
 
-	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithConfigFunc(SizeBasedConfig(int64(nBytes))))
+	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithSizeBasedConfig(int64(nBytes)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestWriter_Rotate_Parallel(t *testing.T) {
 	const keeps = 2
 	const nGoroutines = 10
 
-	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithConfigFunc(SizeBasedConfig(int64(nBytes))))
+	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithSizeBasedConfig(int64(nBytes)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestWriter_Rotate_WhileOpeningFileFromAnotherProcess(t *testing.T) {
 	const nBytes = 100
 	const keeps = 2
 
-	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithConfigFunc(SizeBasedConfig(int64(nBytes))))
+	w, err := NewWriter(string(dir), "test.log", WithKeeps(keeps), WithSizeBasedConfig(int64(nBytes)))
 	if err != nil {
 		t.Fatal(err)
 	}

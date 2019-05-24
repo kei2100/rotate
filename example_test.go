@@ -1,11 +1,15 @@
-# rotate
+package rotate_test
 
-[![CircleCI](https://circleci.com/gh/kei2100/rotate.svg?style=svg)](https://circleci.com/gh/kei2100/rotate)
-[![Build status](https://ci.appveyor.com/api/projects/status/9fax0djsm5le725j/branch/master?svg=true)](https://ci.appveyor.com/project/kei2100/rotate/branch/master)
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"time"
 
-A rotating file Writer
+	"github.com/kei2100/rotate"
+)
 
-```go
 func ExampleWriter() {
 	dir, err := ioutil.TempDir("", "rotate-test")
 	if err != nil {
@@ -32,4 +36,3 @@ func ExampleWriter() {
 
 	// Output: 4/123
 }
-```

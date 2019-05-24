@@ -1,6 +1,9 @@
 package rotate
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 type option struct {
 	permission os.FileMode
@@ -41,9 +44,16 @@ func WithKeeps(v int) OptionFunc {
 	}
 }
 
-// WithConfigFunc let you change the rotate configuration
-func WithConfigFunc(f ConfigFunc) OptionFunc {
+// WithSizeBasedConfig let you change the rotate configuration
+func WithSizeBasedConfig(size int64) OptionFunc {
 	return func(o *option) {
-		o.conf = f
+		o.conf = SizeBasedConfig(size)
+	}
+}
+
+// WithTimeBasedConfig let you change the rotate configuration
+func WithTimeBasedConfig(elapsed time.Duration) OptionFunc {
+	return func(o *option) {
+		o.conf = TimeBasedConfig(elapsed)
 	}
 }
