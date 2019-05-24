@@ -157,7 +157,6 @@ func TestWriter_Rotate_WhileOpeningFileFromAnotherProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer w.Close()
-	writeNCount(w, "a", nBytes-1)
 
 	prog := buildOpenFileProg(dir)
 	cmd := exec.Command(prog, filepath.Join(string(dir), "test.log"))
@@ -177,7 +176,7 @@ func TestWriter_Rotate_WhileOpeningFileFromAnotherProcess(t *testing.T) {
 		t.Fatal("process not found")
 	}
 
-	writeNCount(w, "a", 1)
+	writeNCount(w, "a", nBytes)
 	time.Sleep(500 * time.Millisecond)
 
 	if err := cmd.Process.Kill(); err != nil {
@@ -198,49 +197,80 @@ func Test_pushAndShiftKeeps(t *testing.T) {
 	t.Parallel()
 
 	tt := []struct {
-		file            string
-		rotatedFiles    []string
+		filename        string
+		existFiles      []string
 		keeps           int
 		wantIncludes    []string
 		wantNotIncludes []string
 	}{
 		{
-			file:         "test.log",
-			keeps:        3,
-			wantIncludes: []string{"test.log.1"},
+			filename:        "test.log",
+			existFiles:      []string{"test.log"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1"},
+			wantNotIncludes: []string{"test.log"},
 		},
 		{
-			file:         "test.log",
-			rotatedFiles: []string{"test.log.1"},
-			keeps:        3,
-			wantIncludes: []string{"test.log.1", "test.log.2"},
+			filename:        "test.log",
+			existFiles:      []string{"test.log"},
+			keeps:           0,
+			wantNotIncludes: []string{"test.log", "test.log.1"},
 		},
 		{
-			file:         "test.log",
-			rotatedFiles: []string{"test.log.1", "test.log.2"},
-			keeps:        3,
-			wantIncludes: []string{"test.log.1", "test.log.2", "test.log.3"},
+			filename:        "test.log",
+			existFiles:      []string{"test.log", "test.log.1"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.2"},
+			wantNotIncludes: []string{"test.log"},
 		},
 		{
-			file:            "test.log",
-			rotatedFiles:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			filename:        "test.log",
+			existFiles:      []string{"test.log", "test.log.1", "test.log.2"},
 			keeps:           3,
 			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
-			wantNotIncludes: []string{"test.log.4"},
+			wantNotIncludes: []string{"test.log"},
 		},
 		{
-			file:            "test.log",
-			rotatedFiles:    []string{"test.log.2", "test.log.3"},
+			filename:        "test.log",
+			existFiles:      []string{"test.log", "test.log.1", "test.log.2", "test.log.3"},
 			keeps:           3,
 			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
-			wantNotIncludes: []string{"test.log.4"},
+			wantNotIncludes: []string{"test.log", "test.log.4"},
 		},
 		{
-			file:            "test.log",
-			rotatedFiles:    []string{"test.log.1", "test.log.3"},
+			filename:        "test.log",
+			existFiles:      []string{"test.log", "test.log.2", "test.log.3"},
 			keeps:           3,
 			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
-			wantNotIncludes: []string{"test.log.4"},
+			wantNotIncludes: []string{"test.log", "test.log.4"},
+		},
+		{
+			filename:        "test.log",
+			existFiles:      []string{"test.log", "test.log.1", "test.log.3"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			wantNotIncludes: []string{"test.log", "test.log.4"},
+		},
+		{
+			filename:        "test.log",
+			existFiles:      []string{"test.log", "test.log.2", "test.log.3"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			wantNotIncludes: []string{"test.log", "test.log.4"},
+		},
+		{
+			filename:        "test.log",
+			existFiles:      []string{"test.log.1", "test.log.2", "test.log.3"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.2", "test.log.3"},
+			wantNotIncludes: []string{"test.log", "test.log.4"},
+		},
+		{
+			filename:        "test.log",
+			existFiles:      []string{"test.log.1", "test.log.3"},
+			keeps:           3,
+			wantIncludes:    []string{"test.log.1", "test.log.3"},
+			wantNotIncludes: []string{"test.log", "test.log.2", "test.log.4"},
 		},
 	}
 	for i, te := range tt {
@@ -248,10 +278,10 @@ func Test_pushAndShiftKeeps(t *testing.T) {
 			dir := createTmpDir()
 			defer dir.removeAll()
 
-			if err := touchFiles(dir, append(te.rotatedFiles, te.file)...); err != nil {
+			if err := touchFiles(dir, te.existFiles...); err != nil {
 				t.Fatal(err)
 			}
-			if err := pushAndShiftKeeps(filepath.Join(string(dir), te.file), te.keeps); err != nil {
+			if err := pushAndShiftKeeps(filepath.Join(string(dir), te.filename), te.keeps); err != nil {
 				t.Fatal(err)
 			}
 			if err := dir.waitFileCreated(time.Millisecond, te.wantIncludes...); err != nil {
