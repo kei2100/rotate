@@ -64,14 +64,14 @@ func (w *Writer) Write(p []byte) (int, error) {
 	go func(current *os.File, st *state.State, opt option) {
 		if err := pushAndShiftKeeps(w.filePath, opt.keeps); err != nil {
 			logger.Println(err)
-			logger.Printf("rotate: wait for rotate until next writing")
+			logger.Println("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
 		next, err := file.OpenFile(w.filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_SYNC, opt.permission)
 		if err != nil {
 			logger.Println(err)
-			logger.Printf("rotate: wait for rotate until next writing")
+			logger.Println("rotate: wait for rotate until next writing")
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
