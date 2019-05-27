@@ -68,7 +68,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 			st.CompareAndSwapAsNotRotating()
 			return
 		}
-		next, err := file.OpenFile(w.filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_SYNC, opt.permission)
+		next, err := file.OpenFile(w.filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, opt.permission)
 		if err != nil {
 			logger.Println(err)
 			logger.Println("rotate: wait for rotate until next writing")
