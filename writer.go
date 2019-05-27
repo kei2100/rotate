@@ -54,7 +54,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 		return n, err
 	}
 	w.state.AddSize(int64(n))
-	if !w.opt.conf.NeedRotate(FileState{OpenedAt: w.state.OpenedAt(), Size: w.state.Size()}) {
+	if !w.opt.policy.NeedRotate(FileState{OpenedAt: w.state.OpenedAt(), Size: w.state.Size()}) {
 		return n, nil
 	}
 	if !w.state.CompareAndSwapAsRotating() {
