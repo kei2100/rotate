@@ -14,7 +14,7 @@ func ExampleWriter() {
 	defer os.RemoveAll(dir)
 
 	const bytes3 int64 = 3
-	w, err := rotate.NewWriter(dir, "test.log", rotate.WithSizeBasedConfig(bytes3))
+	w, err := rotate.NewWriter(dir, "test.log", rotate.WithSizeBasedPolicy(bytes3))
 	if err != nil {
 		panic(err)
 	}

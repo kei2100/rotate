@@ -2,13 +2,12 @@ package rotate
 
 import (
 	"os"
-	"time"
 )
 
 type option struct {
 	permission os.FileMode
 	keeps      int
-	conf       ConfigFunc
+	policy     PolicyFunc
 }
 
 // OptionFunc let you change follow.Reader behavior.
@@ -24,7 +23,7 @@ const (
 func (o *option) apply(opts ...OptionFunc) {
 	o.permission = DefaultPermission
 	o.keeps = DefaultKeeps
-	o.conf = SizeBasedConfig(DefaultSize)
+	o.policy = SizeBasedPolicy(DefaultSize)
 	for _, fn := range opts {
 		fn(o)
 	}
@@ -44,16 +43,16 @@ func WithKeeps(v int) OptionFunc {
 	}
 }
 
-// WithSizeBasedConfig let you change the rotate configuration
-func WithSizeBasedConfig(size int64) OptionFunc {
+// WithSizeBasedPolicy let you change the rotate policy
+func WithSizeBasedPolicy(size int64) OptionFunc {
 	return func(o *option) {
-		o.conf = SizeBasedConfig(size)
+		o.policy = SizeBasedPolicy(size)
 	}
 }
 
-// WithTimeBasedConfig let you change the rotate configuration
-func WithTimeBasedConfig(elapsed time.Duration) OptionFunc {
+// WithTimeBasedPolicy let you change the rotate policy
+func WithTimeBasedPolicy(fn func(openedAtUnix int64) bool) OptionFunc {
 	return func(o *option) {
-		o.conf = TimeBasedConfig(elapsed)
+		o.policy = TimeBasedPolicy(fn)
 	}
 }
