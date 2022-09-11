@@ -110,10 +110,10 @@ func formatRotatedPath(path string, num int) string {
 	return fmt.Sprintf("%s.%d", path, num)
 }
 
-//   e.g. path "log", keeps 3
-//   - log > log.1 | log.1 > log.2 | log.2 > log.3 | log.3 > remove
-//   - log > log.1 | log.1 > log.2 |               | log.3 > noop
-//   -             | log.1 > noop  | log.2 > noop  | log.3 > noop
+// e.g. path "log", keeps 3
+// - log > log.1 | log.1 > log.2 | log.2 > log.3 | log.3 > remove
+// - log > log.1 | log.1 > log.2 |               | log.3 > noop
+// -             | log.1 > noop  | log.2 > noop  | log.3 > noop
 func pushAndShiftKeeps(path string, keeps int) error {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
