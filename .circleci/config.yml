@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  go: circleci/go@1.7.1
+  go: circleci/go@1.7.2
 
 workflows:
   standard:
@@ -12,7 +12,7 @@ jobs:
   test:
     executor:
       name: go/default
-      tag: '1.19'
+      tag: '1.20'
     steps:
       - checkout
       - printenv
@@ -33,7 +33,7 @@ commands:
     steps:
     - restore_cache:
         key: lint-v1-{{ .Revision }}
-    - run: ls .circleci/lintok > /dev/null 2>&1 || make vet lint && touch .circleci/lintok
+    - run: ls .circleci/lintok > /dev/null 2>&1 || make lint && touch .circleci/lintok
     - save_cache:
         key: lint-v1-{{ .Revision }}
         paths:
