@@ -1,8 +1,8 @@
 module github.com/kei2100/rotate
 
-go 1.22
+go 1.23
 
-toolchain go1.22.1
+toolchain go1.23.0
 
 require (
 	github.com/kei2100/filesharedelete v0.0.0-20210814234627-59643fb948be
